@@ -34,6 +34,7 @@ export default function AudioPlayer({ file, onClose, onFileReplaced, error, auto
   const dragCounterRef = useRef(0)
   const progressBarRef = useRef<HTMLDivElement>(null)
   const autoplayRef = useRef(autoplay)
+  const hasAutoplayedRef = useRef(false)
 
   // Update autoplay ref when prop changes
   useEffect(() => {
@@ -54,6 +55,9 @@ export default function AudioPlayer({ file, onClose, onFileReplaced, error, auto
     // Reset audio playback position
     audio.currentTime = 0
     
+    // Reset autoplay flag when file changes
+    hasAutoplayedRef.current = false
+    
     const cleanup = setupAudioListeners()
     return () => {
       audio.pause()
@@ -61,12 +65,13 @@ export default function AudioPlayer({ file, onClose, onFileReplaced, error, auto
     }
   }, [file, setupAudioListeners, reset])
 
-  // Autoplay when metadata is loaded
+  // Autoplay when metadata is loaded (only once per file)
   useEffect(() => {
-    if (duration > 0 && autoplayRef.current && !isPlaying) {
+    if (duration > 0 && autoplayRef.current && !hasAutoplayedRef.current) {
+      hasAutoplayedRef.current = true
       togglePlayPause()
     }
-  }, [duration, autoplayRef, isPlaying, togglePlayPause])
+  }, [duration, togglePlayPause])
 
   // Scrubber seeking handlers
   const handleScrubberClick = (e: React.MouseEvent<HTMLDivElement>) => {
