@@ -36,7 +36,6 @@ export function useAudioDrop(onFileAccepted?: (file: File) => void): UseAudioDro
   )
 
   const rejectFile = useCallback((reason: string) => {
-    setFile(null)
     setError(reason)
   }, [])
 
