@@ -66,14 +66,83 @@ pnpm coverage     # Coverage report
   - Fully keyboard-accessible
 
 ### 🔜 Planned (not started)
-- **Audio playback** — Play/pause/seek using the Web Audio API or `<audio>` element
+- **Audio playback** — Play/pause/seek using `<audio>` element + Web Audio API
+- **Metadata display** — Extract and display song duration, title (from ID3 tags)
 - **Waveform visualisation** — Canvas-based waveform rendered from `AudioBuffer`
 - **Frequency visualisation** — Real-time FFT spectrum via `AnalyserNode`
+- **Custom decoders** — Support for non-standard audio formats
+- **Encoding/save-as** — Export to WAV, MP3, or other formats
 - **Additional routes** — e.g. a settings page, a history/recent files page
 
 ---
 
-## Architecture Patterns
+## Audio Architecture & Strategy
+
+### Rationale
+The project will evolve through three phases: metadata display → visualization → custom decoders & encoding. The architecture must support this progression without major refactors.
+
+### Phase 1 (Immediate): Metadata Display
+**Stack**: `<audio>` element + `music-metadata` library
+
+**Why this approach:**
+- Simple, dependency-minimal, accessible
+- Leverages browser's native codec support (MP3, WAV)
+- `music-metadata` (50 KB) extracts ID3/Vorbis tags and duration reliably
+- No performance overhead for current use case
+
+**Implementation**:
+```typescript
+// Hook: useAudioMetadata.ts
+import * as mm from 'music-metadata';
+
+const metadata = await mm.parseBlob(audioFile);
+const duration = metadata.format.duration; // seconds
+const title = metadata.common.title || filename;
+```
+
+### Phase 2 (Near-term): Visualization
+**Add**: Web Audio API + Canvas component
+
+**Why**:
+- `AudioContext.decodeAudioData()` gives direct access to PCM samples
+- Enables waveform rendering to canvas
+- Keeps `<audio>` for simple playback (optimal performance)
+- Zero risk of breaking Phase 1
+
+**Note**: Files decoded twice (once by browser, once by Web Audio), but acceptable at this scale.
+
+### Phase 3 (Future): Custom Decoders & Encoding
+**Two paths based on complexity**:
+
+**Path A — Pure JS Decoders** (if custom codec is JavaScript-based):
+- Migrate entirely to Web Audio API
+- Implement custom decoders as PCM pipelines
+- Feed PCM to encoders (e.g., Opus, WAV libraries)
+- **Drop**: `<audio>` element
+
+**Path B — Complex Formats** (if supporting wide codec range):
+- Introduce FFmpeg.wasm (35 MB, only when needed)
+- Use FFmpeg for decoding → PCM
+- Keep `<audio>` for standard formats
+- Use FFmpeg or JS encoder for export
+
+### Decision Matrix
+
+| Feature | Phase 1 | Phase 2 | Phase 3 |
+|---------|---------|---------|---------|
+| **Playback** | `<audio>` | `<audio>` | Web Audio API or FFmpeg |
+| **Metadata** | `music-metadata` | ✓ (reuse) | ✓ (reuse) |
+| **Visualization** | ✗ | Canvas + `AnalyserNode` | ✓ (enhance) |
+| **Custom decoders** | ✗ | ✗ | Web Audio or FFmpeg |
+| **Encoding** | ✗ | ✗ | JS encoder or FFmpeg |
+
+### Bundle Impact
+- **Phase 1**: +50 KB (`music-metadata`)
+- **Phase 2**: +0 KB (Web Audio API is browser built-in)
+- **Phase 3A**: +~100 KB (JS encoder libs)
+- **Phase 3B**: +35 MB (FFmpeg.wasm, lazy-loaded)
+
+---
 
 ### Hook + Component Split
 Logic lives in `src/hooks/`, UI in `src/components/`. Hooks export plain data and event props; components are purely presentational. See `.github/skills/component-patterns/SKILL.md`.

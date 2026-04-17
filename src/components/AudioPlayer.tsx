@@ -1,5 +1,6 @@
-import { useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useAudioPlayer } from '../hooks/useAudioPlayer'
+import { useAudioMetadata } from '../hooks/useAudioMetadata'
 
 interface AudioPlayerProps {
   file: File
@@ -17,54 +18,59 @@ function isAudioFile(file: File): boolean {
   return ACCEPTED_EXTENSIONS.has(ext)
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+function formatTime(seconds: number): string {
+  if (!isFinite(seconds)) return '0:00'
+  const minutes = Math.floor(seconds / 60)
+  const secs = Math.floor(seconds % 60)
+  return `${minutes}:${secs.toString().padStart(2, '0')}`
 }
 
 export default function AudioPlayer({ file, onClose, onFileReplaced, error }: AudioPlayerProps) {
-  const { isPlaying, togglePlayPause } = useAudioPlayer()
+  const { isPlaying, currentTime, duration, togglePlayPause, audioRef } = useAudioPlayer()
+  const { metadata, extractMetadata } = useAudioMetadata()
   const [isDragActive, setIsDragActive] = useState(false)
   const dragCounterRef = useRef(0)
 
-  const handleDragEnter = useCallback((e: React.DragEvent) => {
+  useEffect(() => {
+    extractMetadata(file)
+  }, [file, extractMetadata])
+
+  const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     dragCounterRef.current += 1
     if (dragCounterRef.current === 1) setIsDragActive(true)
-  }, [])
+  }
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
+  const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
     dragCounterRef.current -= 1
     if (dragCounterRef.current === 0) setIsDragActive(false)
-  }, [])
+  }
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-  }, [])
+  }
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      dragCounterRef.current = 0
-      setIsDragActive(false)
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    dragCounterRef.current = 0
+    setIsDragActive(false)
 
-      const files = e.dataTransfer.files
-      if (!files || files.length === 0) return
-      if (files.length > 1) return
+    const files = e.dataTransfer.files
+    if (!files || files.length === 0) return
+    if (files.length > 1) return
 
-      const droppedFile = files[0]
-      if (isAudioFile(droppedFile)) {
-        onFileReplaced?.(droppedFile)
-      }
-    },
-    [onFileReplaced],
-  )
+    const droppedFile = files[0]
+    if (isAudioFile(droppedFile)) {
+      onFileReplaced?.(droppedFile)
+    }
+  }
+
+  const fileUrl = URL.createObjectURL(file)
 
   return (
     <div
@@ -77,11 +83,14 @@ export default function AudioPlayer({ file, onClose, onFileReplaced, error }: Au
         isDragActive ? 'bg-violet-950/40' : 'bg-gray-900/50',
       ].join(' ')}
     >
+      {/* Hidden audio element */}
+      <audio ref={audioRef} src={fileUrl} />
+
       {/* Song Info Section */}
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <h2 className="truncate text-lg font-semibold text-white">{file.name}</h2>
-          <p className="mt-1 text-sm text-gray-400">{formatBytes(file.size)}</p>
+          <h2 className="truncate text-lg font-semibold text-white">{metadata?.title || file.name}</h2>
+          <p className="mt-1 text-sm text-gray-400">{metadata ? formatTime(metadata.duration) : '--:--'}</p>
         </div>
         <button
           type="button"
@@ -130,13 +139,16 @@ export default function AudioPlayer({ file, onClose, onFileReplaced, error }: Au
       {/* Scrubber / Progress Bar */}
       <div className="flex flex-col gap-2">
         <div className="relative h-1 w-full rounded-full bg-gray-800">
-          {/* Filled track (placeholder - 0% progress) */}
-          <div className="absolute left-0 top-0 h-full w-0 rounded-full bg-violet-500" />
+          {/* Filled track */}
+          <div
+            className="absolute left-0 top-0 h-full rounded-full bg-violet-500 transition-all"
+            style={{ width: duration ? `${(currentTime / duration) * 100}%` : '0%' }}
+          />
         </div>
-        {/* Time display (placeholder) */}
+        {/* Time display */}
         <div className="flex justify-between text-xs text-gray-500">
-          <span>0:00</span>
-          <span>--:--</span>
+          <span>{formatTime(currentTime)}</span>
+          <span>{metadata ? formatTime(metadata.duration) : '--:--'}</span>
         </div>
       </div>
 
