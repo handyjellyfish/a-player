@@ -1,0 +1,116 @@
+# a-player — Agent Briefing
+
+## Purpose
+`a-player` is a React SPA demo for loading, playing, and visualising audio files. It is under active development. The current build is a working foundation: file loading via drag-and-drop is complete; audio playback and visualisation are the next planned phases.
+
+---
+
+## Tech Stack
+
+| Tool | Version | Role |
+|---|---|---|
+| React | 19 | UI framework |
+| TypeScript | 6 | Type safety |
+| Vite | 8 | Dev server + bundler |
+| Tailwind CSS | 4 (Vite plugin) | Styling |
+| React Router | 7 | Client-side routing |
+| Vitest | 4 | Test runner |
+| React Testing Library | 16 | Component tests |
+| pnpm | 10 | Package manager — **always use pnpm, never npm or yarn** |
+
+---
+
+## Project Structure
+
+```
+src/
+  routes/         # Page-level components, one file per route
+    Home.tsx      # Landing page with AudioDropZone
+  components/     # Reusable UI components
+    AudioDropZone.tsx
+    AudioDropZone.test.tsx
+  hooks/          # Custom React hooks (logic only, no JSX)
+    useAudioDrop.ts
+  test/
+    setup.ts      # Vitest + jest-dom setup
+  App.tsx         # Router root
+  main.tsx        # React entry point
+  index.css       # Tailwind import (@import "tailwindcss")
+```
+
+---
+
+## Dev Commands
+
+```bash
+pnpm dev          # Start dev server at http://localhost:5173 (HMR enabled)
+pnpm test         # Vitest in watch mode
+pnpm test:run     # Vitest single run
+pnpm build        # TypeScript check + Vite production build
+pnpm lint         # ESLint
+pnpm coverage     # Coverage report
+```
+
+---
+
+## Current Feature State
+
+### ✅ Done
+- **Project scaffold** — Vite + React 19 + TypeScript 6
+- **Routing** — React Router v7 with `BrowserRouter` wrapping the app
+- **Styling** — Tailwind CSS v4 via `@tailwindcss/vite` plugin (no `tailwind.config.js` needed)
+- **Audio file loading** — Drag-and-drop + click-to-browse on the Home page
+  - Accepts `.wav` and `.mp3` only (validated by MIME type and extension)
+  - Single-file enforcement
+  - Four visual states: idle, drag-active, accepted, rejected
+  - Fully keyboard-accessible
+
+### 🔜 Planned (not started)
+- **Audio playback** — Play/pause/seek using the Web Audio API or `<audio>` element
+- **Waveform visualisation** — Canvas-based waveform rendered from `AudioBuffer`
+- **Frequency visualisation** — Real-time FFT spectrum via `AnalyserNode`
+- **Additional routes** — e.g. a settings page, a history/recent files page
+
+---
+
+## Architecture Patterns
+
+### Hook + Component Split
+Logic lives in `src/hooks/`, UI in `src/components/`. Hooks export plain data and event props; components are purely presentational. See `.github/skills/component-patterns/SKILL.md`.
+
+### Multi-State Components
+Interactive components expose distinct visual states via conditional Tailwind classes (idle / active / accepted / rejected / error). States are driven by the hook, not internal component state.
+
+### Tailwind Theme
+- Dark background: `bg-gray-950`
+- Accent colour: violet (`violet-400`, `violet-500`)
+- Success: green (`green-400`, `green-500`)
+- Error: red (`red-400`, `red-500`)
+- Text hierarchy: `text-white` → `text-gray-200` → `text-gray-400` → `text-gray-500`
+
+### Testing
+- Every component in `src/components/` should have a co-located `.test.tsx`
+- Use `@testing-library/user-event` for interactions; `fireEvent` only when `userEvent` can't bypass browser restrictions (e.g. `accept` attribute filtering on file inputs)
+- No snapshot tests
+
+---
+
+## Key Files to Know
+
+| File | What it does |
+|---|---|
+| `vite.config.ts` | Vite + Tailwind plugin + Vitest config (single source of truth) |
+| `src/hooks/useAudioDrop.ts` | All drag-and-drop + file validation logic |
+| `src/components/AudioDropZone.tsx` | Drop zone UI component |
+| `src/routes/Home.tsx` | Landing page, composes drop zone |
+| `src/test/setup.ts` | Imports `@testing-library/jest-dom` matchers |
+
+---
+
+## Adding a New Feature — Checklist
+
+1. If the feature has significant logic, create a hook in `src/hooks/`
+2. Create the component in `src/components/` with a co-located `.test.tsx`
+3. Add a route in `src/routes/` and register it in `App.tsx` if it's a new page
+4. Style with Tailwind — follow the dark theme palette above
+5. Run `pnpm test:run && pnpm build` before considering the task done
