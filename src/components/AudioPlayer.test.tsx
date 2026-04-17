@@ -181,5 +181,19 @@ describe('AudioPlayer', () => {
       expect(playButtonsAfterEnd.length).toBeGreaterThan(0)
     })
   })
+
+  it('has interactive progress bar with click handler', async () => {
+    const onClose = vi.fn()
+    const { container } = render(<AudioPlayer file={mockFile} onClose={onClose} />)
+
+    const progressBar = container.querySelector('.group.relative.h-1') as HTMLElement
+    expect(progressBar).toBeInTheDocument()
+
+    // Verify progress bar is clickable (cursor: pointer class)
+    expect(progressBar.className).toContain('cursor-pointer')
+  })
 })
+
+
+
 

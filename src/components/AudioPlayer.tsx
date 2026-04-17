@@ -26,10 +26,13 @@ function formatTime(seconds: number): string {
 }
 
 export default function AudioPlayer({ file, onClose, onFileReplaced, error }: AudioPlayerProps) {
-  const { isPlaying, currentTime, duration, togglePlayPause, audioRef, setupAudioListeners, reset } = useAudioPlayer()
+  const { isPlaying, currentTime, duration, togglePlayPause, seek, audioRef, setupAudioListeners, reset } = useAudioPlayer()
   const { metadata, extractMetadata } = useAudioMetadata()
   const [isDragActive, setIsDragActive] = useState(false)
+  const [isSeeking, setIsSeeking] = useState(false)
+  const [wasPlayingBeforeDrag, setWasPlayingBeforeDrag] = useState(false)
   const dragCounterRef = useRef(0)
+  const progressBarRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     extractMetadata(file)
@@ -51,6 +54,60 @@ export default function AudioPlayer({ file, onClose, onFileReplaced, error }: Au
       cleanup?.()
     }
   }, [file, setupAudioListeners, reset])
+
+  // Scrubber seeking handlers
+  const handleScrubberClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!progressBarRef.current || !duration) return
+
+    const rect = progressBarRef.current.getBoundingClientRect()
+    const clickX = e.clientX - rect.left
+    const percentage = Math.max(0, Math.min(1, clickX / rect.width))
+    const newTime = percentage * duration
+
+    seek(newTime)
+  }
+
+  const handleScrubberMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!duration) return
+    e.preventDefault()
+
+    setIsSeeking(true)
+    setWasPlayingBeforeDrag(isPlaying)
+
+    // Pause audio while dragging for smooth seeking
+    if (isPlaying && audioRef.current) {
+      audioRef.current.pause()
+    }
+
+    // Start dragging
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      if (!progressBarRef.current) return
+
+      const rect = progressBarRef.current.getBoundingClientRect()
+      const moveX = moveEvent.clientX - rect.left
+      const percentage = Math.max(0, Math.min(1, moveX / rect.width))
+      const newTime = percentage * duration
+
+      seek(newTime)
+    }
+
+    const handleMouseUp = () => {
+      setIsSeeking(false)
+
+      // Resume playback if it was playing before drag
+      if (wasPlayingBeforeDrag && audioRef.current) {
+        audioRef.current.play?.().catch((err) => {
+          console.error('Failed to resume audio after scrubbing:', err)
+        })
+      }
+
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
+  }
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
@@ -179,12 +236,31 @@ export default function AudioPlayer({ file, onClose, onFileReplaced, error }: Au
 
       {/* Scrubber / Progress Bar */}
       <div className="flex flex-col gap-2">
-        <div className="relative h-1 w-full rounded-full bg-gray-800">
+        <div
+          ref={progressBarRef}
+          onClick={handleScrubberClick}
+          onMouseDown={handleScrubberMouseDown}
+          className="group relative h-1 w-full cursor-pointer rounded-full bg-gray-800 hover:h-2 transition-all"
+        >
           {/* Filled track */}
           <div
-            className="absolute left-0 top-0 h-full rounded-full bg-violet-500 transition-all"
+            className={[
+              'absolute left-0 top-0 h-full rounded-full bg-violet-500',
+              isPlaying && !isSeeking ? 'transition-all' : '',
+            ].join(' ')}
             style={{ width: duration ? `${(currentTime / duration) * 100}%` : '0%' }}
           />
+          {/* Scrubber thumb */}
+          {duration > 0 && (
+            <div
+              className="absolute top-1/2 h-3 w-3 -translate-y-1/2 rounded-full bg-violet-400 opacity-0 shadow-lg transition-opacity group-hover:opacity-100"
+              style={{
+                left: `calc(${(currentTime / duration) * 100}% - 6px)`,
+                opacity: isSeeking ? 1 : undefined,
+              }}
+              aria-hidden="true"
+            />
+          )}
         </div>
         {/* Time display */}
         <div className="flex justify-between text-xs text-gray-500">
