@@ -26,7 +26,7 @@ function formatTime(seconds: number): string {
 }
 
 export default function AudioPlayer({ file, onClose, onFileReplaced, error }: AudioPlayerProps) {
-  const { isPlaying, currentTime, duration, togglePlayPause, audioRef } = useAudioPlayer()
+  const { isPlaying, currentTime, duration, togglePlayPause, audioRef, setupAudioListeners, reset } = useAudioPlayer()
   const { metadata, extractMetadata } = useAudioMetadata()
   const [isDragActive, setIsDragActive] = useState(false)
   const dragCounterRef = useRef(0)
@@ -34,6 +34,23 @@ export default function AudioPlayer({ file, onClose, onFileReplaced, error }: Au
   useEffect(() => {
     extractMetadata(file)
   }, [file, extractMetadata])
+
+  useEffect(() => {
+    const audio = audioRef.current
+    if (!audio) return
+
+    // Reset player state when file changes
+    reset()
+    
+    // Reset audio playback position
+    audio.currentTime = 0
+    
+    const cleanup = setupAudioListeners()
+    return () => {
+      audio.pause()
+      cleanup?.()
+    }
+  }, [file, setupAudioListeners, reset])
 
   const handleDragEnter = (e: React.DragEvent) => {
     e.preventDefault()
@@ -70,7 +87,31 @@ export default function AudioPlayer({ file, onClose, onFileReplaced, error }: Au
     }
   }
 
-  const fileUrl = URL.createObjectURL(file)
+  const fileUrlRef = useRef<string | null>(null)
+
+  useEffect(() => {
+    // Create blob URL for the file
+    const newUrl = URL.createObjectURL(file)
+    
+    // Revoke old URL if it exists
+    if (fileUrlRef.current) {
+      URL.revokeObjectURL(fileUrlRef.current)
+    }
+    
+    fileUrlRef.current = newUrl
+    
+    // Update audio element src
+    if (audioRef.current) {
+      audioRef.current.src = newUrl
+    }
+
+    // Cleanup: revoke URL when component unmounts
+    return () => {
+      if (fileUrlRef.current) {
+        URL.revokeObjectURL(fileUrlRef.current)
+      }
+    }
+  }, [file])
 
   return (
     <div
@@ -84,7 +125,7 @@ export default function AudioPlayer({ file, onClose, onFileReplaced, error }: Au
       ].join(' ')}
     >
       {/* Hidden audio element */}
-      <audio ref={audioRef} src={fileUrl} />
+      <audio ref={audioRef} />
 
       {/* Song Info Section */}
       <div className="flex items-start justify-between gap-4">
