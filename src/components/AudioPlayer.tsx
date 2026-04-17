@@ -7,6 +7,7 @@ interface AudioPlayerProps {
   onClose: () => void
   onFileReplaced?: (file: File) => void
   error?: string | null
+  autoplay?: boolean
 }
 
 const ACCEPTED_MIME_TYPES = new Set(['audio/wav', 'audio/wave', 'audio/mpeg', 'audio/mp3'])
@@ -25,14 +26,19 @@ function formatTime(seconds: number): string {
   return `${minutes}:${secs.toString().padStart(2, '0')}`
 }
 
-export default function AudioPlayer({ file, onClose, onFileReplaced, error }: AudioPlayerProps) {
+export default function AudioPlayer({ file, onClose, onFileReplaced, error, autoplay = false }: AudioPlayerProps) {
   const { isPlaying, currentTime, duration, togglePlayPause, seek, audioRef, setupAudioListeners, reset } = useAudioPlayer()
   const { metadata, extractMetadata } = useAudioMetadata()
   const [isDragActive, setIsDragActive] = useState(false)
   const [isSeeking, setIsSeeking] = useState(false)
-  const [wasPlayingBeforeDrag, setWasPlayingBeforeDrag] = useState(false)
   const dragCounterRef = useRef(0)
   const progressBarRef = useRef<HTMLDivElement>(null)
+  const autoplayRef = useRef(autoplay)
+
+  // Update autoplay ref when prop changes
+  useEffect(() => {
+    autoplayRef.current = autoplay
+  }, [autoplay])
 
   useEffect(() => {
     extractMetadata(file)
@@ -55,6 +61,13 @@ export default function AudioPlayer({ file, onClose, onFileReplaced, error }: Au
     }
   }, [file, setupAudioListeners, reset])
 
+  // Autoplay when metadata is loaded
+  useEffect(() => {
+    if (duration > 0 && autoplayRef.current && !isPlaying) {
+      togglePlayPause()
+    }
+  }, [duration, autoplayRef, isPlaying, togglePlayPause])
+
   // Scrubber seeking handlers
   const handleScrubberClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!progressBarRef.current || !duration) return
@@ -71,8 +84,9 @@ export default function AudioPlayer({ file, onClose, onFileReplaced, error }: Au
     if (!duration) return
     e.preventDefault()
 
+    // Capture playing state locally to avoid stale closure
+    const wasPlaying = isPlaying
     setIsSeeking(true)
-    setWasPlayingBeforeDrag(isPlaying)
 
     // Pause audio while dragging for smooth seeking
     if (isPlaying && audioRef.current) {
@@ -95,7 +109,7 @@ export default function AudioPlayer({ file, onClose, onFileReplaced, error }: Au
       setIsSeeking(false)
 
       // Resume playback if it was playing before drag
-      if (wasPlayingBeforeDrag && audioRef.current) {
+      if (wasPlaying && audioRef.current) {
         audioRef.current.play?.().catch((err) => {
           console.error('Failed to resume audio after scrubbing:', err)
         })
